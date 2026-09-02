@@ -368,11 +368,14 @@ static int __init onic_init_module(void)
 {
 	pr_info("%s %s", onic_drv_str, onic_drv_ver);
 	pr_info("Registering pci driver...");
-	return pci_register_driver(&pci_driver);
+	int code = pci_register_driver(&pci_driver);
+	pr_info("ret code: %d", code);
+	return code;
 }
 
 static void __exit onic_exit_module(void)
 {
+	pr_info("Exiting onic module");
 	pci_unregister_driver(&pci_driver);
 }
 
