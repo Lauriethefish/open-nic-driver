@@ -134,6 +134,9 @@ static const struct net_device_ops onic_netdev_ops = {
 	.ndo_change_mtu = onic_change_mtu,
 	.ndo_get_stats64 = onic_get_stats64,
 	.ndo_bpf = onic_xdp,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,6,0)
+	.ndo_siocdevprivate = onic_siocdevprivate,
+#endif
 // For why we do this, see onic_netdev.c:onix_xdp_run
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
 	.ndo_xdp_xmit = onic_xdp_xmit,
@@ -164,6 +167,7 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
         static int xmc_init=0;
 #endif
 	/* int pci_using_dac; */
+	pr_info("onic_probe enter");
 
 	rv = pci_enable_device_mem(pdev);
 	if (rv < 0) {
@@ -216,7 +220,9 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	memset(&saddr, 0, sizeof(struct sockaddr));
 	memcpy(saddr.sa_data, onic_default_dev_addr, 6);
-	get_random_bytes(saddr.sa_data + 3, 3);
+	saddr.sa_data[3] = pdev->bus->number;
+	saddr.sa_data[4] = PCI_SLOT(pdev->devfn);
+	saddr.sa_data[5] = PCI_FUNC(pdev->devfn);
 	onic_set_mac_address(netdev, (void *)&saddr);
 
 	priv = netdev_priv(netdev);
@@ -259,6 +265,15 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	netif_set_real_num_tx_queues(netdev, priv->num_tx_queues);
 	netif_set_real_num_rx_queues(netdev, priv->num_rx_queues);
+
+#ifdef NF_IOCTL
+	rv = onic_create_nfdp_dev(&priv->hw.nfdp_handle, priv->pdev);
+	if (rv < 0) {
+		pr_info("create_nfdp_dev() faileed %d", rv);
+		onic_destroy_nfdp_dev(priv->hw.nfdp_handle);
+		goto free_netdev;
+	}
+#endif /* NF_IOCTL */
 
 	rv = register_netdev(netdev);
 	if (rv < 0) {

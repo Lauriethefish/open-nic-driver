@@ -36,6 +36,98 @@
 #include "qdma_access/qdma_register.h"
 #include "onic.h"
 
+#ifdef NF_IOCTL
+#define NFDP_OFFSET     0x0000
+#define NFDP_END        0x400000
+#define NFDP_MAXLEN     NFDP_END - NFDP_OFFSET
+
+#define NFDP_IOCTL_CMD_WRITE_REG        (SIOCDEVPRIVATE+1)
+#define NFDP_IOCTL_CMD_READ_REG         (SIOCDEVPRIVATE+2)
+
+
+// This should be here
+static struct nfdp_dev *onic_get_nfdp_dev(unsigned long handle)
+{
+	return (struct nfdp_dev *)handle;
+}
+
+// This should move to onic_main.c
+struct nfdp_dev *nfdp_create_dev(struct pci_dev *pdev, u8 bar)
+{
+	struct nfdp_dev *nfdev;
+
+	if (!pdev || (bar > 6))
+		return NULL;
+
+	nfdev = kzalloc(sizeof(struct nfdp_dev), GFP_KERNEL);
+	if (!nfdev)
+		return NULL;
+
+	nfdev->pdev = pdev;
+
+	nfdev->addr = pci_iomap_range(pdev, bar, NFDP_OFFSET, NFDP_MAXLEN);
+	if (!nfdev->addr) {
+		kfree(nfdev);
+		return NULL;
+	}
+	pr_info("BAR2 address is nfdev->addr[0x%p]", nfdev->addr);
+
+	return nfdev;
+}
+
+int onic_create_nfdp_dev(unsigned long *handle, struct pci_dev *pdev)
+{
+	struct nfdp_dev *nfdev;
+
+	if (!handle || !pdev)
+		return -EINVAL;
+
+	/* assume that CMAC registers are mapped at BAR2 */
+	nfdev = nfdp_create_dev(pdev, 2);
+	if (!nfdev)
+		return -ENOMEM;
+
+	spin_lock_init(&nfdev->lock);
+
+	*handle = (unsigned long)nfdev;
+	return 0;
+}
+
+void nfdp_destroy_dev(struct nfdp_dev *nfdev)
+{
+	if (!nfdev)
+		return;
+
+	pci_iounmap(nfdev->pdev, nfdev->addr);
+	kfree(nfdev);
+}
+
+void onic_destroy_nfdp_dev(unsigned long handle)
+{
+	struct nfdp_dev *nfdev = onic_get_nfdp_dev(handle);
+
+	if (!nfdev)
+		return;
+
+	nfdp_destroy_dev(nfdev);
+}
+
+
+// This should be here
+static inline u32 nfdp_read_reg(struct nfdp_dev *nfdev, u32 offset)
+{
+	return ioread32(nfdev->addr + offset);
+}
+
+// This should be here
+static inline void nfdp_write_reg(struct nfdp_dev *nfdev, u32 offset, u32 val)
+{
+	iowrite32(val, nfdev->addr + offset);
+}
+#endif /*NF_IOCTL*/
+
+
+
 #define ONIC_RX_DESC_STEP 256
 
 inline static u16 onic_ring_get_real_count(struct onic_ring *ring)
@@ -43,6 +135,34 @@ inline static u16 onic_ring_get_real_count(struct onic_ring *ring)
 	/* Valid writeback entry means one less count of descriptor entries */
 	return (ring->wb) ? (ring->count - 1) : ring->count;
 }
+
+#ifdef NF_IOCTL
+static int ioctl_read_reg(struct nfdp_dev *nfdev,
+				 struct onic_ioctl_ifreq *sifr)
+{
+	unsigned long flags;
+	// Spin lock ?
+	spin_lock_irqsave(&nfdev->lock, flags);
+	sifr->val = nfdp_read_reg(nfdev, (u32)sifr->addr);
+	spin_unlock_irqrestore(&nfdev->lock, flags);
+	pr_info("sifr->addr[%08x] sifr->val[%08x]", sifr->addr, sifr->val);
+
+	return 0;
+}
+
+static int ioctl_write_reg(struct nfdp_dev *nfdev,
+				 struct onic_ioctl_ifreq *sifr)
+{
+	unsigned long flags;
+	pr_info("sifr->addr[%08x] sifr->val[%08x]", sifr->addr, sifr->val);
+	// Spin lock ?
+	spin_lock_irqsave(&nfdev->lock, flags);
+	nfdp_write_reg(nfdev, (u32)sifr->addr, (u32)sifr->val);
+	spin_unlock_irqrestore(&nfdev->lock, flags);
+
+	return 0;
+}
+#endif /*NF_IOCTl*/
 
 inline static bool onic_ring_full(struct onic_ring *ring)
 {
@@ -1104,9 +1224,60 @@ int onic_set_mac_address(struct net_device *dev, void *addr)
 	return 0;
 }
 
+int nf_onic_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+{
+#ifdef NF_IOCTL
+	struct onic_private *priv = netdev_priv(dev);
+	struct nfdp_dev *nfdev = onic_get_nfdp_dev(priv->hw.nfdp_handle);
+	struct onic_ioctl_ifreq sifr;
+	int err;
+
+	switch(cmd) {
+	case NFDP_IOCTL_CMD_WRITE_REG:
+		err = copy_from_user(&sifr, ifr->ifr_data,
+			sizeof(struct onic_ioctl_ifreq));
+		if (err != 0) {
+			err = -EFAULT;
+			break;
+		}
+		err = ioctl_write_reg(nfdev, &sifr);
+		break;
+	case NFDP_IOCTL_CMD_READ_REG:
+		err = copy_from_user(&sifr, ifr->ifr_data,
+			sizeof(struct onic_ioctl_ifreq));
+		if (err != 0) {
+			err = -EFAULT;
+			break;
+		}
+		err = ioctl_read_reg(nfdev, &sifr);
+		if (err != 0) {
+			err = -EFAULT;
+			break;
+		}
+		err = copy_to_user(ifr->ifr_data, &sifr,
+			sizeof(struct onic_ioctl_ifreq));
+		if (err != 0)
+			err = -EFAULT;
+		break;
+	default:
+		pr_info("unspported ioctl 0x%8x", cmd);
+		err = -EOPNOTSUPP;
+		break;
+	}
+#endif /*NF_IOCTL*/
+	return 0;
+}
+
+
 int onic_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
-	return 0;
+	return nf_onic_do_ioctl(dev, ifr, cmd);
+}
+
+int onic_siocdevprivate(struct net_device *dev, struct ifreq *ifr,
+		void *data, int cmd)
+{
+	return nf_onic_do_ioctl(dev, ifr, cmd);
 }
 
 int onic_change_mtu(struct net_device *dev, int mtu)

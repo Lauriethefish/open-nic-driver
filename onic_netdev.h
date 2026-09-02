@@ -53,4 +53,26 @@ int onic_xdp(struct net_device *dev, struct netdev_bpf *xdp);
 
 int onic_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
           u32 flags);
+
+int onic_siocdevprivate(struct net_device *dev, struct ifreq *ifr, void *data, int cmd);
+
+#define NF_IOCTL
+#ifdef NF_IOCTL
+
+struct nfdp_dev {
+	struct pci_dev *pdev;
+	void __iomem *addr;
+	spinlock_t lock;
+};
+
+struct onic_ioctl_ifreq {
+	uint32_t addr;
+	uint32_t val;
+};
+
+int onic_create_nfdp_dev(unsigned long *handle, struct pci_dev *pdev);
+
+void onic_destroy_nfdp_dev(unsigned long handle);
+#endif /* NF_IOCTL */
+
 #endif

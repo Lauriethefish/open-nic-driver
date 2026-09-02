@@ -27,6 +27,7 @@ struct onic_hardware {
 	unsigned long qdma;
 	u8 num_cmacs;
 	void __iomem *addr;	/* mapping of shell registers */
+	unsigned long nfdp_handle;
 };
 
 struct onic_qdma_h2c_param {
