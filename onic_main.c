@@ -367,6 +367,7 @@ static struct pci_driver pci_driver = {
 static int __init onic_init_module(void)
 {
 	pr_info("%s %s", onic_drv_str, onic_drv_ver);
+	pr_info("Registering pci driver...");
 	return pci_register_driver(&pci_driver);
 }
 
