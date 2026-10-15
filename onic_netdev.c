@@ -23,7 +23,6 @@
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <linux/bpf_trace.h>
-#include <stdint.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <net/page_pool/helpers.h>
@@ -1165,8 +1164,8 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 
 	/* minimum Ethernet packet length is 60 */
 	/* Would be good to log the checksum here and verify it is unset */
-	unsigned uint16_t* transport_header = skb_inner_transport_header(skb);
-	uint16_t checksum = transport_header[3];
+	unsigned u16* transport_header = skb_inner_transport_header(skb);
+	u16 checksum = transport_header[3];
 	printk(KERN_INFO "UDP checksum: %d", checksum);
 	transport_header[3] = 0; // Indicate no checksum calculated yet
 
