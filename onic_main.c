@@ -24,6 +24,7 @@
 #include <linux/netdevice.h>
 #include <linux/moduleparam.h>
 #include <linux/bpf.h>
+#include <linux/netdev_features.h>
 
 #include "onic.h"
 #include "onic_hardware.h"
@@ -208,6 +209,8 @@ static int onic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	SET_NETDEV_DEV(netdev, &pdev->dev);
 	netdev->netdev_ops = &onic_netdev_ops;
+	// NB TCP isn't supported but apparently can't support only UDP
+	netdev->hw_features = NETIF_F_IP_CSUM_BIT;
 	onic_set_ethtool_ops(netdev);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
 	xdp_set_features_flag(netdev, NETDEV_XDP_ACT_BASIC | NETDEV_XDP_ACT_REDIRECT);
