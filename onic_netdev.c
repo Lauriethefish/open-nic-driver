@@ -1169,7 +1169,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 		printk(KERN_INFO "header[%d]: %x", i, header[i]);
 	}
 
-	u8 protocol = ip_header[9];
+	u8 protocol = header[9];
 	printk(KERN_INFO "Protocol: %x", protocol);
 	
 	if(protocol == 0x11) {
