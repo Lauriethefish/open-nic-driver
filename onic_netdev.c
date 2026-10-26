@@ -1172,6 +1172,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 		u16* transport_header = (u16*) skb_transport_header(skb);
 		u16 checksum = transport_header[3];
 		printk(KERN_INFO "UDP checksum: %d", checksum);
+		transport_header[3] = 1234;
 	}
 
 	rv = skb_put_padto(skb, ETH_ZLEN);
