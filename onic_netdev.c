@@ -1165,10 +1165,6 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	/* minimum Ethernet packet length is 60 */
 	/* Would be good to log the checksum here and verify it is unset */
 	u8* ip_header = skb_network_header(skb);
-	for(int i = 0; i < 20; i++) {
-		printk(KERN_INFO "IP header[%d]: %x", i, ip_header[i]);
-	}
-
 	u8 protocol = ip_header[9];
 	printk(KERN_INFO "Protocol: %x", protocol);
 	
@@ -1176,7 +1172,6 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 		u16* transport_header = (u16*) skb_transport_header(skb);
 		u16 checksum = transport_header[3];
 		printk(KERN_INFO "UDP checksum: %d", checksum);
-		transport_header[3] = 0; // Indicate no checksum calculated yet
 	}
 
 	rv = skb_put_padto(skb, ETH_ZLEN);
