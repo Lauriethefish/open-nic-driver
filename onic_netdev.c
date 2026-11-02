@@ -590,6 +590,7 @@ static int onic_rx_poll(struct napi_struct *napi, int budget)
 		// here the page where packet data was written has either been recycled or marked for recycling
 		onic_rx_page_refill(q);
 
+		printk(KERN_INFO "RX-ed packed from NF\n");
 		pcpu_stats_pointer->rx_packets++;
 		pcpu_stats_pointer->rx_bytes += len;
 
@@ -1222,7 +1223,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 		onic_set_tx_head(priv->hw.qdma, qid, ring->next_to_use);
 	}
 
-	printk(KERN_INFO "TX OK\n");
+	printk(KERN_INFO "TX OK to NF\n");
 	return NETDEV_TX_OK;
 }
 
