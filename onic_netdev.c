@@ -1166,7 +1166,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 	/* Would be good to log the checksum here and verify it is unset */
 	u8* header = skb_mac_header(skb);
 	for(int i = 0; i < 42; i++) {
-		printk(KERN_INFO "header[%d]: %x", i, header[i]);
+		//printk(KERN_INFO "header[%d]: %x", i, header[i]);
 	}
 
 	u8 protocol = header[9];
@@ -1222,6 +1222,7 @@ netdev_tx_t onic_xmit_frame(struct sk_buff *skb, struct net_device *dev)
 		onic_set_tx_head(priv->hw.qdma, qid, ring->next_to_use);
 	}
 
+	printk(KERN_INFO "TX OK\n");
 	return NETDEV_TX_OK;
 }
 
